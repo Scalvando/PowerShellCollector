@@ -88,7 +88,7 @@ function GetAutoruns
 			"profile"=$_.Profile;
 			"description"=$_.Description;
 			"company"=$_.Company;
-			"image_path"="$($_.ImagePath)";
+			"path"="$($_.ImagePath)";
         	"version"=$_.Version;
 			"launch_string"="$($_.LaunchString)";
 			"md5"=$_.MD5;
@@ -358,7 +358,7 @@ function GetProcesses
 			"md5"=$processMD5;
        		"timestamp"="$startTime";
 			"start_time"="$startTime";
-			"id"=$_.Id.ToString();
+			"pid"=[int]$_.Id;
         	"_type"="ps_process";
 			"modules"=$modules;
 			"signature"="$($signature.SignerCertificate.Thumbprint)";
@@ -448,14 +448,14 @@ function GetEventLogs{
 			"timestamp"="$timeCreated";
 			"time_created"="$timeCreated";
 			"machine_mame"="$($_.MachineName)";
-        	"user_id"="$($_.UserId)";
+        	"uid"=[int]$_.UserId;
 			"version"=$_.Version;
 			"message"=$_.Message;
-			"process_id"="$($_.ProcessId)";
+			"pid"=[int]$_.ProcessId;
         	"level"=$_.Level;
 			"level_display_name"="$($_.LevelDisplayName)";
 			"related_activity_id"="$($_.RelatedActivityId)";
-			"id"="$($_.Id)";
+			"event_id"=[int]$_.Id;
         	"container_log"="$($_.ContainerLog)";
 			"provider_id"="$($_.ProviderId)";
 			"provider_name"="$($_.ProviderName)";
@@ -489,9 +489,9 @@ function GetDrives
 		$drive = @{
 			"name"="$($_.Name)";
 			"description"="$($_.Description)";
-			"root"="$($_.Root)";
-			"free"=$free;
-			"used"=$used;
+			"drive_root"="$($_.Root)";
+			"free_space"=$free;
+			"used_space"=$used;
 			"provider"="$($_.Provider)";
 			"_type"="drive";
 			"date_collected"="$dateCollected";
@@ -514,8 +514,8 @@ function GetDNSCache
 	ForEach-Object{
 		$recordName = ($_.Line -Split ":",2)[1] -replace " ",""
 		$recordType = ($_.Context.PostContext[0] -Split ":",2)[1] -replace " ",""
-		$ttl = ($_.Context.PostContext[1] -Split ":",2)[1] -replace " ",""
-		$length = ($_.Context.PostContext[2] -Split ":",2)[1] -replace " ",""
+		$ttl = [int]($_.Context.PostContext[1] -Split ":",2)[1] -replace " ",""
+		$length = [int]($_.Context.PostContext[2] -Split ":",2)[1] -replace " ",""
 		$section = ($_.Context.PostContext[3] -Split ":",2)[1] -replace " ",""
 		$aaaaRecord = ($_.Context.PostContext[4] -Split ":",2)[1] -replace " ",""
 		$record = @{
@@ -593,10 +593,10 @@ function GetSystemDetails
 			"ip_subnet"="$($_.IPSubnet)";
 			"ip_address"="$($_.IPAddress)";
 			"mac_address$_.MACAddress"="$()";
-			"mtu"="$($_.MTU)";
-			"tcp_window_size"="$($_.TCPWindowSize)";
+			"mtu"=[int]$_.MTU;
+			"tcp_window_size"=[int]$_.TCPWindowSize;
 			"service_name"=$_.ServiceName; 
-			"index"=$_.Index;
+			"index"=[int]$_.Index;
 		}
                         
 		$interfaces += $interface
@@ -632,7 +632,7 @@ function GetConnections
 		$connection = @{
 			"protocol"=$_.Protocol;
 			"process"=$_.Process;
-			"pid"=$_.PID;
+			"pid"=[int]$_.PID;
 			"state"=$_.State;
 			"local"=$_.Local;
 			"remote_ip"=$_.Remote;
@@ -686,7 +686,7 @@ function GetLogonSessions() {
 			"auth_package"="$($_.AuthPackage)";
 			"logon_type"="$($_.LogonType)";
 			"session"="$($_.Session)";
-			"sid"="$($_.Sid)";
+			"session_id"=[int]$_.Sid;
 			"timestamp"="$logonTime";
 			"logon_time"="$logonTime";
 			"logon_server"="$($_.LogonServer)";
@@ -719,13 +719,13 @@ function GetBrowserHistory
 			"url"=$_.URL;"title"=$_.Title;
 			"timestamp"="$visitTime";
 			"visit_time"="$visitTime";
-			"visit_count"=$_.VisitCount;
+			"visit_count"=[int]$_.VisitCount;
 			"visited_from"=$_.VisitedFrom;
 			"web_browser"=$_.WebBrowser;
 			"user_profile"=$_.UserProfile;
 			"browser_profile"=$_.BrowserProfile;
-			"url_length"=$_.URLLength;
-			"typed_count"=$_.TypedCount;
+			"url_length"=[int]$_.URLLength;
+			"typed_count"=[int]$_.TypedCount;
 			"_type"="browserhistory";
 			"case"="$case";
 			"machine"=$machine.Name;
@@ -765,7 +765,7 @@ function GetScheduledJobs
 			"days_of_month"=$_.DaysOfMonth;
 			"days_of_week"=$_.DaysOfWeek;
         	"interact_with_desktop"=$_.InteractWithDesktop;
-			"job_id"=$_.JobId;
+			"job_id"=[int]$_.JobId;
 			"job_status"="$($_.JobStatus)";
         	"run_repeatedly"=$_.RunRepeatedly;
 			"start_time"="$startTime";
