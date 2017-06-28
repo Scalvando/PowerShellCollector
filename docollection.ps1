@@ -714,9 +714,11 @@ function GetBrowserHistory
 	ConvertFrom-CSV -Header URL,Title,VisitTime,VisitCount,VisitedFrom,WebBrowser,UserProfile,BrowserProfile,URLLength,TypedCount |
 	ForEach-Object{
 		$visitTime = if($_.VisitTime){([datetime]::ParseExact($_.VisitTime,"G",$null)).ToUniversalTime().GetDateTimeFormats('s')}
-		
+		#https://stackoverflow.com/questions/14363214/get-domain-from-url-in-powershell
 		$record = @{
-			"url"=$_.URL;"title"=$_.Title;
+			"url"=$_.URL;
+			"domain"=([System.Uri]$_.URL).Host -replace '^www\.';
+			"title"=$_.Title;
 			"timestamp"="$visitTime";
 			"visit_time"="$visitTime";
 			"visit_count"=[int]$_.VisitCount;
