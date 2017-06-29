@@ -81,6 +81,7 @@ function GetAutoruns
 		$time = if($_.Time){([datetime]::ParseExact($_.Time,"yyyyMMdd-HHmmss",$null)).ToUniversalTime().GetDateTimeFormats('s')}else{$date_collected}
 		$startupCommand = @{
 			"timestamp"="$time";
+			"time"="$time";
 			"entry_location"=$_.EntryLocation;
 			"entry"="$($_.Entry)";
 			"enabled"=$_.Enabled;
@@ -113,6 +114,8 @@ function GetServices
 {
 	$md5 = New-Object -TypeName System.Security.Cryptography.MD5CryptoServiceProvider
 	$sha1 = New-Object -TypeName System.Security.Cryptography.SHA1CryptoServiceProvider
+	$sha256 = New-Object -TypeName System.Security.Cryptography.SHA256CryptoServiceProvider
+
 	$services = @()
  
 	#Iterate through all of the service objects
@@ -123,6 +126,7 @@ function GetServices
 		{
 			$serviceMD5 = $None
 			$serviceSHA1 = $None
+			$serviceSHA256 = $None
 			#Attempt to do some splitting based on switches with preceeding -'s, may not be the best way to do it
 			if($_.PathName.contains("`"")){
 				$path = $_.PathName.Split("`"")[1]
@@ -141,6 +145,8 @@ function GetServices
                 $serviceMD5 = [System.BitConverter]::ToString($md5.ComputeHash($file)) -replace "-",""
 				#Get SHA-1 of file
     			$serviceSHA1 = [System.BitConverter]::ToString($sha1.ComputeHash($file)) -replace "-",""
+				#Get SHA-256 of file
+				$serviceSHA256 = [System.BitConverter]::ToString($sha256.ComputeHash($file)) -replace "-",""
 				#Get rid of file
                 $file.Dispose()
             }
@@ -154,6 +160,10 @@ function GetServices
                 if(!$serviceSHA1)
 				{
 					$serviceSHA1 =  "Unable to hash"
+				}
+				if(!$serviceSHA256)
+				{
+					$serviceSHA256 =  "Unable to hash"
 				}
             }
             finally
@@ -190,6 +200,7 @@ function GetServices
         	"system_name"="$($_.SystemName)";
 			"md5"=$serviceMD5;
 			"sha-1"=$serviceSHA1;
+			"sha-256"=$serviceSHA256;
 			"signature"="$($signature.SignerCertificate.Thumbprint)";
         	"signature_status"="$($signature.Status)";
 			"is_os_binary"=$signature.IsOSBinary;
@@ -209,6 +220,7 @@ function GetSystemDrivers
 {
 	$md5 = New-Object -TypeName System.Security.Cryptography.MD5CryptoServiceProvider
 	$sha1 = New-Object -TypeName System.Security.Cryptography.SHA1CryptoServiceProvider
+	$sha256 = New-Object -TypeName System.Security.Cryptography.SHA256CryptoServiceProvider
 	$drivers = @()
 	#Iterate through system drivers
 	Get-WmiObject Win32_SystemDriver | 
@@ -222,18 +234,37 @@ function GetSystemDrivers
 			}
             try
             {
+				<#
+					Use filestream for better performance and open the stream with read sharing 
+					to try and prevent issues with opening files that may be in use.
+				#>
     			$file = [System.IO.File]::Open($path,[System.IO.Filemode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+				#Get MD5 of file
                 $driverMD5 = [System.BitConverter]::ToString($md5.ComputeHash($file)) -replace "-",""
+				#Get SHA-1 of file
     			$driverSHA1 = [System.BitConverter]::ToString($sha1.ComputeHash($file)) -replace "-",""
-                $file.Dispose()
+				#Get SHA-256 of file
+				$driverSHA256 = [System.BitConverter]::ToString($sha256.ComputeHash($file)) -replace "-",""
             }
             catch
             {
-                $driverMD5 = "Unable to hash"
-                $driverSHA1 =  "Unable to hash"
+				#If the file could not be hashed set the hash to Unable to hash
+				if(!$driverMD5)
+				{
+					$driverMD5 = "Unable to hash"
+				}
+                if(!$driverSHA1)
+				{
+					$driverSHA1 =  "Unable to hash"
+				}
+				if(!$driverSHA256)
+				{
+					$driverSHA256 =  "Unable to hash"
+				}
             }
             finally
             {
+				#Make sure the file closed
                 if($file)
                 {
                     $file.Dispose()
@@ -264,6 +295,7 @@ function GetSystemDrivers
 			"system_name"="$($_.SystemName)";
 			"md5"=$driverMD5;
 			"sha-1"=$driverSHA1;
+			"sha-256"=$driverSHA256;
 			"_type"="systemdriver";
 			"date_collected"="$dateCollected";
 			"machine"=$machine.Name;
@@ -280,6 +312,8 @@ function GetProcesses
 {
 	$md5 = New-Object -TypeName System.Security.Cryptography.MD5CryptoServiceProvider
 	$sha1 = New-Object -TypeName System.Security.Cryptography.SHA1CryptoServiceProvider
+	$sha256 = New-Object -TypeName System.Security.Cryptography.SHA256CryptoServiceProvider
+
 	$processes = @()
 	Get-Process |
 	ForEach-Object{
@@ -290,18 +324,37 @@ function GetProcesses
 			#Try to hash file path
             try
             {
-    			$file = [System.IO.File]::Open($_.Path,[System.IO.Filemode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+				<#
+					Use filestream for better performance and open the stream with read sharing 
+					to try and prevent issues with opening files that may be in use.
+				#>
+    			$file = [System.IO.File]::Open($path,[System.IO.Filemode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+				#Get MD5 of file
                 $processMD5 = [System.BitConverter]::ToString($md5.ComputeHash($file)) -replace "-",""
+				#Get SHA-1 of file
     			$processSHA1 = [System.BitConverter]::ToString($sha1.ComputeHash($file)) -replace "-",""
-                $file.Dispose()
+				#Get SHA-256 of file
+				$processSHA256 = [System.BitConverter]::ToString($sha256.ComputeHash($file)) -replace "-",""
             }
             catch
             {
-                $processMD5 = "Unable to hash"
-                $processSHA1 =  "Unable to hash"
+				#If the file could not be hashed set the hash to Unable to hash
+				if(!$processMD5)
+				{
+					$processMD5 = "Unable to hash"
+				}
+                if(!$processSHA1)
+				{
+					$processSHA1 =  "Unable to hash"
+				}
+				if(!$processSHA256)
+				{
+					$processSHA256 =  "Unable to hash"
+				}
             }
             finally
             {
+				#Make sure the file closed
                 if($file)
                 {
                     $file.Dispose()
@@ -316,31 +369,54 @@ function GetProcesses
 			#Hash and get signature of dll
             if($module.FileName)
             {
-                try
-                {
-        			$file = [System.IO.File]::Open($module.FileName,[System.IO.Filemode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
-                    $moduleMD5 = [System.BitConverter]::ToString($md5.ComputeHash($file)) -replace "-",""
-        			$moduleSHA1 = [System.BitConverter]::ToString($sha1.ComputeHash($file)) -replace "-",""
-                }
-                catch
-                {
-                    $moduleMD5 = "Unable to hash"
-                    $moduleSHA1 =  "Unable to hash"
-                }
-                finally
-                {
-                    if($file)
-                    {
-                        $file.Dispose()
-                    }
-                }
+                #Try to hash file path
+				try
+				{
+					<#
+						Use filestream for better performance and open the stream with read sharing 
+						to try and prevent issues with opening files that may be in use.
+					#>
+					$file = [System.IO.File]::Open($path,[System.IO.Filemode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+					#Get MD5 of file
+					$moduleMD5 = [System.BitConverter]::ToString($md5.ComputeHash($file)) -replace "-",""
+					#Get SHA-1 of file
+					$moduleSHA1 = [System.BitConverter]::ToString($sha1.ComputeHash($file)) -replace "-",""
+					#Get SHA-256 of file
+					$moduleSHA256 = [System.BitConverter]::ToString($sha256.ComputeHash($file)) -replace "-",""
+				}
+				catch
+				{
+					#If the file could not be hashed set the hash to Unable to hash
+					if(!$moduleMD5)
+					{
+						$moduleMD5 = "Unable to hash"
+					}
+					if(!$moduleSHA1)
+					{
+						$moduleSHA1 =  "Unable to hash"
+					}
+					if(!$moduleSHA256)
+					{
+						$moduleSHA256 =  "Unable to hash"
+					}
+				}
+				finally
+				{
+					#Make sure the file closed
+					if($file)
+					{
+						$file.Dispose()
+					}
+				}
                 $moduleSignature = Get-AuthenticodeSignature $module.FileName
 
             }
             #add dll and its info to dlls
             $modules+=@{
 				"name"="$($module.ModuleName)";
-				"sha1"=$moduleSHA1;"md5"=$moduleMD5;
+				"sha-1"=$moduleSHA1;
+				"sha-256"=$moduleSHA256;
+				"md5"=$moduleMD5;
 				"company"="$($module.FileVersionInfo.CompanyName)";
            		"coments"="$($module.FileVersionInfo.Comments)";
 				"version"="$($module.FileVersionInfo.FileVersion)";
@@ -356,6 +432,7 @@ function GetProcesses
 			"path"="$($_.Path)";
 			"sha-1"=$processSHA1;
 			"md5"=$processMD5;
+			"sha-256"=$processSHA256;
        		"timestamp"="$startTime";
 			"start_time"="$startTime";
 			"pid"=[int]$_.Id;
@@ -597,8 +674,7 @@ function GetSystemDetails
 			"tcp_window_size"=[int]$_.TCPWindowSize;
 			"service_name"=$_.ServiceName; 
 			"index"=[int]$_.Index;
-		}
-                        
+		}       
 		$interfaces += $interface
 	}
 	
@@ -672,7 +748,7 @@ function GetLogonSessions() {
 				$proc = $process.split(":")
 				if($proc){
 					$processes += @{
-						"pid"=$proc[0].Trim();
+						"pid"=[int]$proc[0].Trim();
 						"name"=$proc[1].Trim()
 					}
 				}
@@ -706,8 +782,7 @@ function GetLogonSessions() {
 
 #Get browsing history of all major browsers
 function GetBrowserHistory
-{
-	
+{	
 	.\BrowsingHistoryView /HistorySource 1 /VisitTimeFilterType 1 /SComma .\history_temp.csv | Out-Null
 	$history = @()
 	Get-Content .\history_temp.csv | Select-Object -skip 1 | 
@@ -787,36 +862,69 @@ function GetFileHashes
 { 
 	$md5 = New-Object -TypeName System.Security.Cryptography.MD5CryptoServiceProvider
 	$sha1 = New-Object -TypeName System.Security.Cryptography.SHA1CryptoServiceProvider
-	$path = Convert-Path -Path {Read-Host 'Enter the location to hash:'} 
+	$sha256 = New-Object -TypeName System.Security.Cryptography.SHA256CryptoServiceProvider
+	$path = Convert-Path -Path {Read-Host 'Enter the location to recursively hash:'}
+	$files = @() 
 	Get-ChildItem $path -Recurse | 
 	ForEach-Object{
 		if (! $_.PSIsContainer) 
 		{
 			try
-            {
-    			$file = [System.IO.File]::Open($_.FullName,[System.IO.Filemode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
-                $fileMD5 = [System.BitConverter]::ToString($md5.ComputeHash($file)) -replace "-",""
-    			$fileSHA1 = [System.BitConverter]::ToString($sha1.ComputeHash($file)) -replace "-",""
-                $file.Dispose()
-            }
-            catch
-            {
-                $fileMD5 = "Unable to hash"
-                $fileSHA1 =  "Unable to hash"
-            }
-            finally
-            {
-                if($file)
-                {
-                    $file.Dispose()
-                }
-            }
+				{
+					<#
+						Use filestream for better performance and open the stream with read sharing 
+						to try and prevent issues with opening files that may be in use.
+					#>
+					$file = [System.IO.File]::Open($path,[System.IO.Filemode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+					#Get MD5 of file
+					$fileMD5 = [System.BitConverter]::ToString($md5.ComputeHash($file)) -replace "-",""
+					#Get SHA-1 of file
+					$fileSHA1 = [System.BitConverter]::ToString($sha1.ComputeHash($file)) -replace "-",""
+					#Get SHA-256 of file
+					$fileSHA256 = [System.BitConverter]::ToString($sha256.ComputeHash($file)) -replace "-",""
+				}
+				catch
+				{
+					#If the file could not be hashed set the hash to Unable to hash
+					if(!$fileMD5)
+					{
+						$fileMD5 = "Unable to hash"
+					}
+					if(!$fileSHA1)
+					{
+						$fileSHA1 =  "Unable to hash"
+					}
+					if(!$fileSHA256)
+					{
+						$fileSHA256 =  "Unable to hash"
+					}
+				}
+				finally
+				{
+					#Make sure the file closed
+					if($file)
+					{
+						$file.Dispose()
+					}
+				}
 			$creationTime = if($_.CreationTimeUtc){$_.CreationTimeUtc.GetDateTimeFormats("s")}
 			$lastAccessTime = if($_.LastAccessTimeUtc){$_.LastAccessTimeUtc.GetDateTimeFormats("s")}
 			$lastWriteTime = if($_.LastWriteTimeUtc){$_.LastWriteTimeUtc.GetDateTimeFormats("s")}
-			
-			$_.Name + "," + $_.FullName + ",$fileMD5,$fileSHA1,$creationTime,$lastAccessTime,$lastWriteTime," + $_.Length
+			$file = @{
+				"timestamp"="$lastWriteTime";
+				"file_name"=$_.Name;
+				"path"=$_.FullName;
+				"md5"=$fileMD5;
+				"sha-1"=$fileSHA1;
+				"creation_time"="$creationTime";
+				"last_access_time"="$lastAccessTime";
+				"last_write_time"="$lastWriteTime";
+				"size"=$_.Length
+			}
+			$files += ConvertToJSON($file)
 		}
+		$outpath = "$outdir\\{0}_{1}_Files.json" -f $case,$machine.Name
+		$files | Set-Content "$outpath"
 	}
 }
 
