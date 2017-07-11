@@ -30,6 +30,12 @@ function ConvertToJSON([object] $object)
   return $serializer.Serialize($object)
 }
 
+function WriteToFile($items, $outputPath)
+{
+	$content = $items | Out-String
+	$outputDirectory = Resolve-Path $outdir
+	[System.IO.File]::WriteAllLines("$outputDirectory\\$outputPath", $content)
+}
 #Metadata for all JSON records
 $dateCollected = (Get-Date).ToUniversalTime().GetDateTimeFormats('s')
 $case =  Read-Host 'Case name: '
@@ -105,8 +111,8 @@ function GetAutoruns
 		}
 		$autoruns += ConvertToJSON($startupCommand)
 	}
-	$outpath = "$outdir\\{0}_{1}_Autoruns.json" -f $case,$machine.Name
-	$autoruns | Set-Content "$outpath"
+	$outputPath = "{0}_{1}_Autoruns.json" -f $case,$machine.Name
+	WriteToFile($autoruns, $outputPath)
 }
 
 #This gets a list of all the services from the system
@@ -201,8 +207,8 @@ function GetServices
 		#Convert dictionary to JSON object
 		$services += ConvertToJSON($service) 
 	}
-	$outpath = "$outdir\\{0}_{1}_Services.json" -f $case,$machine.Name
-	$services | Set-Content "$outpath"
+	$outputPath = "${0}_{1}_Services.json" -f $case,$machine.Name
+	WriteToFile($services, $outputPath)
 }
 
 #Get the system drivers, includes hardware drivers from driverquery and a bunch of other stuff
@@ -288,8 +294,8 @@ function GetSystemDrivers
 		}
 		$drivers += ConvertToJSON($driver) 
 	}
-	$outpath = "$outdir\\{0}_{1}_Drivers.json" -f $case,$machine.Name
-	$drivers | Set-Content "$outpath"
+	$outputPath = "{0}_{1}_Drivers.json" -f $case,$machine.Name
+	WriteToFile($drivers, $outputPath)
 }
 
 #Get the running processes
@@ -420,8 +426,8 @@ function GetProcesses
         
 		$processes += ConvertToJSON($process)
 	}
-	$outpath = "$outdir\\{0}_{1}_Processes.json" -f $case,$machine.Name
-	$processes | Set-Content "$outpath"
+	$outputPath = "{0}_{1}_Processes.json" -f $case,$machine.Name
+	WriteToFile($processes, $outputPath)
 }
 
 #Get the system hotfixes
@@ -453,8 +459,8 @@ function GetHotfixes
 					
 		$hotfixes += ConvertToJSON($hotfix)
 	}
-	$outpath = "$outdir\\{0}_{1}_Hotfixes.json" -f $case,$machine.Name
-	$hotfixes | Set-Content "$outpath"
+	$outputPath = "{0}_{1}_Hotfixes.json" -f $case,$machine.Name
+	WriteToFile($hotfixes, $outputPath)
 }
 
 #Get all the evtx, evt, and etl logs on the system
@@ -483,49 +489,53 @@ function GetEventLogs{
 	Account lockout (ID 539)
 
 	#>
-	$events = @()
+	
 	$logs = Get-WinEvent -ListLog * | Where-Object {$_.RecordCount} | Select-Object -ExpandProperty LogName
-	Get-WinEvent -LogName $logs -Oldest -ErrorAction SilentlyContinue | 
-	ForEach-Object{
-		$timeCreated = if($_.TimeCreated){$_.TimeCreated.ToUniversalTime().GetDateTimeFormats('s')}
-        $keywords = @()
-        foreach($keyword in $_.KeywordsDisplayName)
-        {
-            $keywords+=$keyword
-        }
-		$event = @{
-			"log_name"="$($_.LogName)";
-			"timestamp"="$timeCreated";
-			"time_created"="$timeCreated";
-			"machine_mame"="$($_.MachineName)";
-        	"uid"=[int]$_.UserId;
-			"version"=$_.Version;
-			"message"=$_.Message;
-			"pid"=[int]$_.ProcessId;
-        	"level"=$_.Level;
-			"level_display_name"="$($_.LevelDisplayName)";
-			"related_activity_id"="$($_.RelatedActivityId)";
-			"event_id"=[int]$_.Id;
-        	"container_log"="$($_.ContainerLog)";
-			"provider_id"="$($_.ProviderId)";
-			"provider_name"="$($_.ProviderName)";
-        	"record_id"=$_.RecordId;
-			"thread_id"=$_.ThreadId;
-			"keywords"=$keywords;
-			"task"=$_.Task;
-			"task_display_name"="$($_.TaskDisplayName)";
-        	"opcode"=$_.Opcode;
-			"opcode_display_name"="$($_.OpcodeDisplayName)";
-			"qualifiers"=$_.Qualifiers;
-			"date_collected"="$dateCollected";
-        	"machine"=$machine.Name;
-			"case"="$case";
-			"_type"="event";
+	$logs | ForEach-Object {
+		$events = @()
+		Get-WinEvent -LogName $log -Oldest -ErrorAction SilentlyContinue | 
+		ForEach-Object{
+			$timeCreated = if($_.TimeCreated){$_.TimeCreated.ToUniversalTime().GetDateTimeFormats('s')}
+			$keywords = @()
+			foreach($keyword in $_.KeywordsDisplayName)
+			{
+				$keywords+=$keyword
+			}
+			$event = @{
+				"log_name"="$($_.LogName)";
+				"timestamp"="$timeCreated";
+				"time_created"="$timeCreated";
+				"machine_mame"="$($_.MachineName)";
+				"uid"=[int]$_.UserId;
+				"version"=$_.Version;
+				"message"=$_.Message;
+				"pid"=[int]$_.ProcessId;
+				"level"=$_.Level;
+				"level_display_name"="$($_.LevelDisplayName)";
+				"related_activity_id"="$($_.RelatedActivityId)";
+				"event_id"=[int]$_.Id;
+				"container_log"="$($_.ContainerLog)";
+				"provider_id"="$($_.ProviderId)";
+				"provider_name"="$($_.ProviderName)";
+				"record_id"=$_.RecordId;
+				"thread_id"=$_.ThreadId;
+				"keywords"=$keywords;
+				"task"=$_.Task;
+				"task_display_name"="$($_.TaskDisplayName)";
+				"opcode"=$_.Opcode;
+				"opcode_display_name"="$($_.OpcodeDisplayName)";
+				"qualifiers"=$_.Qualifiers;
+				"date_collected"="$dateCollected";
+				"machine"=$machine.Name;
+				"case"="$case";
+				"_type"="event";
+			}
+			$events += ConvertToJSON($event)
 		}
-		$events += ConvertToJSON($event)
+		$logName = $log -replace ' ',''
+		$outpath = "{0}_{1}_{2}_EventLog.json" -f $case,$machine.Name, $logName
+		WriteToFile($events, $outpath)
 	}
-	$outpath = "$outdir\\{0}_{1}_EventLogs.json" -f $case,$machine.Name
-	$events | Set-Content "$outpath"
 }
 
 #Get the mounted drives, including hives 
@@ -550,8 +560,8 @@ function GetDrives
 		}
 		$drives += ConvertToJSON($drive)
 	}
-	$outpath = "$outdir\\{0}_{1}_Drives.json" -f $case,$machine.Name
-	$drives | Set-Content "$outpath"	
+	$outputPath = "{0}_{1}_Drives.json" -f $case,$machine.Name
+	WriteToFile($drives, $outputPath)
 }
 
 #Get the DNS cachwe from the system. This information can be very volatile if the TTL is set to a low value for the record
@@ -582,8 +592,8 @@ function GetDNSCache
 		}
 		$dnsRecords += ConvertToJSON($record)
 	}
-	$outpath = "$outdir\\{0}_{1}_DNSRecords.json" -f $case,$machine.Name
-	$dnsRecords | Set-Content "$outpath"
+	$outputPath = "{0}_{1}_DNSRecords.json" -f $case,$machine.Name
+	WriteToFile($dnsRecords, $outputPath)
 }
 
 #Get a bunch of system information for the machine
@@ -656,8 +666,9 @@ function GetSystemDetails
 	$systemInformation["date_collected"] = "$dateCollected"
 	$systemInformation["machine"] = $machine.Name
 	$systemInformation["case"] = "$case"
-	$outpath = "$outdir\\{0}_{1}_SystemInformation.json" -f $case,$machine.Name
-	ConvertToJSON($systemInformation) | Set-Content $outpath
+	$systemDetails = ConvertToJSON($systemInformation)
+	$outputPath = "{0}_{1}_SystemInformation.json" -f $case,$machine.Name
+	WriteToFile($systemDetails, $outputPath)
 }
 
 #Get all active connections on the machine
@@ -693,8 +704,8 @@ function GetConnections
 		}
 		$connections += ConvertToJSON($connection) 
 	}
-	$outpath = "$outdir\\{0}_{1}_Connections.json" -f $case,$machine.Name
-	$connections | Set-Content $outpath
+	$outputPath = "{0}_{1}_Connections.json" -f $case,$machine.Name
+	WriteToFile($connections, $outputPath)
 }
 
 #Get the logon sessions
@@ -749,8 +760,8 @@ function GetLogonSessions() {
 		}
 		$logonSessions += ConvertToJSON($session)
 	}
-	$outpath = "$outdir\\{0}_{1}_LogonSessions.json" -f $case,$machine.Name
-	$logonSessions | Set-Content "$outpath"
+	$outputPath = "{0}_{1}_LogonSessions.json" -f $case,$machine.Name
+	WriteToFile($logonSessions, $outputPath)
 }
 
 #Get browsing history of all major browsers
@@ -783,9 +794,10 @@ function GetBrowserHistory
 		}
 		$history += ConvertToJSON($record)
 	}
-	$outpath = "$outdir\\{0}_{1}_BrowserHistory.json" -f $case,$machine.Name
-	$history | Set-Content "$outpath"
 	Remove-Item .\history_temp.csv
+	$outputPath = "{0}_{1}_BrowserHistory.json" -f $case,$machine.Name
+	WriteToFile($history, $outputPath)
+	
 }
 
 #Get the scheduled jobs
@@ -826,8 +838,8 @@ function GetScheduledJobs
 		}
         $jobs += ConvertToJSON($scheduledJob)
     }
-	$outpath = "$outdir\\{0}_{1}_ScheduledJobs.json" -f $case,$machine.Name
-	$jobs | Set-Content "$outpath"
+	$outputPath = "{0}_{1}_ScheduledJobs.json" -f $case,$machine.Name
+	WriteToFile($jobs, $outputPath)
 }
 
 #Get the file hashes for the machine, may be problematic as even with the read sharing some files cant be hashed.
