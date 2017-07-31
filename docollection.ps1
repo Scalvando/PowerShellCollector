@@ -19,7 +19,8 @@
 #>
 param([switch]$All,[switch]$Autoruns,[switch]$Connections,[switch]$FileHashes,[switch]$LogonSessions,
       [switch]$Processes,[switch]$Details,[switch]$EventLogs,[switch]$Hotfixes,[switch]$Services,
-      [switch]$Drives,[switch]$DNS,[switch]$BrowserHistory,[switch]$ScheduledJobs,[switch]$SystemDrivers)
+	  [switch]$Drives,[switch]$DNS,[switch]$BrowserHistory,[switch]$ScheduledJobs,[switch]$SystemDrivers,
+	  [switch]$Hives,[switch]$MFT)
 
 Add-Type -Assembly System.Web.Extensions
 function ConvertToJSON([object] $object)
@@ -30,22 +31,16 @@ function ConvertToJSON([object] $object)
   return $serializer.Serialize($object)
 }
 
-function WriteToFile($items, $outputPath)
-{
-	$content = $items | Out-String
-	$outputDirectory = Resolve-Path $outdir
-	[System.IO.File]::WriteAllLines("$outputDirectory\\$outputPath", $content)
-}
 #Metadata for all JSON records
 $dateCollected = (Get-Date).ToUniversalTime().GetDateTimeFormats('s')
 $case =  Read-Host 'Case name: '
 $machine = Get-WmiObject  Win32_ComputerSystem | Select-Object Name
 #Used to determine which version of SysInternals clients to use
 $architecture = (Get-WmiObject Win32_OperatingSystem).OSArchitecture
-$outdir = Read-Host 'Output Path: '
-if(!$(Test-Path $outdir))
+$outputPath = Resolve-Path $(Read-Host 'Output Path: ')
+if(!$(Test-Path $outputPath))
 {
-	New-Item -ItemType Directory -Path $outdir
+	New-Item -ItemType Directory -Path $outputPath
 }
 <#
 https://technet.microsoft.com/en-ca/sysinternals/bb963902.aspx
@@ -111,8 +106,9 @@ function GetAutoruns
 		}
 		$autoruns += ConvertToJSON($startupCommand)
 	}
-	$outputPath = "{0}_{1}_Autoruns.json" -f $case,$machine.Name
-	WriteToFile($autoruns, $outputPath)
+	$outputFile = "{0}_{1}_Autoruns.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $autoruns)
+	
 }
 
 #This gets a list of all the services from the system
@@ -207,8 +203,8 @@ function GetServices
 		#Convert dictionary to JSON object
 		$services += ConvertToJSON($service) 
 	}
-	$outputPath = "${0}_{1}_Services.json" -f $case,$machine.Name
-	WriteToFile($services, $outputPath)
+	$outputFile = "{0}_{1}_Services.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $services)
 }
 
 #Get the system drivers, includes hardware drivers from driverquery and a bunch of other stuff
@@ -294,8 +290,8 @@ function GetSystemDrivers
 		}
 		$drivers += ConvertToJSON($driver) 
 	}
-	$outputPath = "{0}_{1}_Drivers.json" -f $case,$machine.Name
-	WriteToFile($drivers, $outputPath)
+	$outputFile = "{0}_{1}_Drivers.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $drivers)
 }
 
 #Get the running processes
@@ -426,8 +422,8 @@ function GetProcesses
         
 		$processes += ConvertToJSON($process)
 	}
-	$outputPath = "{0}_{1}_Processes.json" -f $case,$machine.Name
-	WriteToFile($processes, $outputPath)
+	$outputFile = "{0}_{1}_Processes.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $processes)
 }
 
 #Get the system hotfixes
@@ -459,8 +455,8 @@ function GetHotfixes
 					
 		$hotfixes += ConvertToJSON($hotfix)
 	}
-	$outputPath = "{0}_{1}_Hotfixes.json" -f $case,$machine.Name
-	WriteToFile($hotfixes, $outputPath)
+	$outputFile = "{0}_{1}_Hotfixes.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $hotfixes)
 }
 
 #Get all the evtx, evt, and etl logs on the system
@@ -493,8 +489,13 @@ function GetEventLogs{
 	$logs = Get-WinEvent -ListLog * | Where-Object {$_.RecordCount} | Select-Object -ExpandProperty LogName
 	$logs | ForEach-Object {
 		$events = @()
-		Get-WinEvent -LogName $log -Oldest -ErrorAction SilentlyContinue | 
+		Get-WinEvent -LogName $_ -Oldest | 
 		ForEach-Object{
+			$logName = $_  -replace "/","_" -replace " ","-"
+			$outputFile = "{0}_{1}_{2}_EventLog.json" -f $case,$machine.Name,$logName
+			if(Test-Path $outputFile){
+				Continue
+			}
 			$timeCreated = if($_.TimeCreated){$_.TimeCreated.ToUniversalTime().GetDateTimeFormats('s')}
 			$keywords = @()
 			foreach($keyword in $_.KeywordsDisplayName)
@@ -506,7 +507,7 @@ function GetEventLogs{
 				"timestamp"="$timeCreated";
 				"time_created"="$timeCreated";
 				"machine_mame"="$($_.MachineName)";
-				"uid"=[int]$_.UserId;
+				"uid"="$($_.UserId)";
 				"version"=$_.Version;
 				"message"=$_.Message;
 				"pid"=[int]$_.ProcessId;
@@ -532,9 +533,7 @@ function GetEventLogs{
 			}
 			$events += ConvertToJSON($event)
 		}
-		$logName = $log -replace ' ',''
-		$outpath = "{0}_{1}_{2}_EventLog.json" -f $case,$machine.Name, $logName
-		WriteToFile($events, $outpath)
+		[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $events)
 	}
 }
 
@@ -560,8 +559,8 @@ function GetDrives
 		}
 		$drives += ConvertToJSON($drive)
 	}
-	$outputPath = "{0}_{1}_Drives.json" -f $case,$machine.Name
-	WriteToFile($drives, $outputPath)
+	$outputFile = "{0}_{1}_Drives.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $drives)
 }
 
 #Get the DNS cachwe from the system. This information can be very volatile if the TTL is set to a low value for the record
@@ -592,8 +591,8 @@ function GetDNSCache
 		}
 		$dnsRecords += ConvertToJSON($record)
 	}
-	$outputPath = "{0}_{1}_DNSRecords.json" -f $case,$machine.Name
-	WriteToFile($dnsRecords, $outputPath)
+	$outputFile = "{0}_{1}_DNSRecords.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $dnsRecords)
 }
 
 #Get a bunch of system information for the machine
@@ -667,8 +666,8 @@ function GetSystemDetails
 	$systemInformation["machine"] = $machine.Name
 	$systemInformation["case"] = "$case"
 	$systemDetails = ConvertToJSON($systemInformation)
-	$outputPath = "{0}_{1}_SystemInformation.json" -f $case,$machine.Name
-	WriteToFile($systemDetails, $outputPath)
+	$outputFile = "{0}_{1}_SystemInformation.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $systemDetails)
 }
 
 #Get all active connections on the machine
@@ -704,8 +703,8 @@ function GetConnections
 		}
 		$connections += ConvertToJSON($connection) 
 	}
-	$outputPath = "{0}_{1}_Connections.json" -f $case,$machine.Name
-	WriteToFile($connections, $outputPath)
+	$outputFile = "{0}_{1}_Connections.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $connections)
 }
 
 #Get the logon sessions
@@ -746,7 +745,7 @@ function GetLogonSessions() {
 			"auth_package"="$($_.AuthPackage)";
 			"logon_type"="$($_.LogonType)";
 			"session"="$($_.Session)";
-			"session_id"=[int]$_.Sid;
+			"session_id"="$($_.Sid)";
 			"timestamp"="$logonTime";
 			"logon_time"="$logonTime";
 			"logon_server"="$($_.LogonServer)";
@@ -760,8 +759,8 @@ function GetLogonSessions() {
 		}
 		$logonSessions += ConvertToJSON($session)
 	}
-	$outputPath = "{0}_{1}_LogonSessions.json" -f $case,$machine.Name
-	WriteToFile($logonSessions, $outputPath)
+	$outputFile = "{0}_{1}_LogonSessions.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $logonSessions)
 }
 
 #Get browsing history of all major browsers
@@ -795,8 +794,8 @@ function GetBrowserHistory
 		$history += ConvertToJSON($record)
 	}
 	Remove-Item .\history_temp.csv
-	$outputPath = "{0}_{1}_BrowserHistory.json" -f $case,$machine.Name
-	WriteToFile($history, $outputPath)
+	$outputFile = "{0}_{1}_BrowserHistory.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $history)
 	
 }
 
@@ -838,20 +837,20 @@ function GetScheduledJobs
 		}
         $jobs += ConvertToJSON($scheduledJob)
     }
-	$outputPath = "{0}_{1}_ScheduledJobs.json" -f $case,$machine.Name
-	WriteToFile($jobs, $outputPath)
+	$outputFile = "{0}_{1}_ScheduledJobs.json" -f $case,$machine.Name
+	[System.IO.File]::WriteAllLines("$outputPath\\$outputFile", $jobs)
 }
 
 #Get the file hashes for the machine, may be problematic as even with the read sharing some files cant be hashed.
 function GetFileHashes
 { 
-	http://blog.brianhartsock.com/2008/12/13/using-powershell-for-md5-checksums/
+	#http://blog.brianhartsock.com/2008/12/13/using-powershell-for-md5-checksums/
 	$md5 = [System.Security.Cryptography.HashAlgorithm]::Create("MD5")#New-Object -TypeName System.Security.Cryptography.MD5CryptoServiceProvider
 	$sha1 = [System.Security.Cryptography.HashAlgorithm]::Create("SHA1")#New-Object -TypeName System.Security.Cryptography.SHA1CryptoServiceProvider
 	$sha256 = [System.Security.Cryptography.HashAlgorithm]::Create("SHA256")#New-Object -TypeName System.Security.Cryptography.SHA256CryptoServiceProvider
 	$pathname = Read-Host 'Enter the location to recursively hash'
 	$path = Convert-Path -Path $pathname
-	$outpath = "$outdir\\{0}_{1}_Files.json" -f $case,$machine.Name
+	$outpath = "$outputPath\\{0}_{1}_Files.json" -f $case,$machine.Name
 	Get-ChildItem $path -Recurse | 
 	ForEach-Object{
 		if (!$_.PSIsContainer) 
@@ -913,29 +912,65 @@ function GetFileHashes
 
 function GetMFT
 {
-	.\RawCopy.exe "/FileNamePath:$($env:SYSTEMDRIVE)0" /OutputPath:ExtractedFiles
+	if(!$(Test-Path "$outputPath\MFT"))
+	{
+		New-Item -ItemType directory "$outputPath\MFT"
+	}
+	
+	if($architecture -eq "64-bit")
+	{
+		.\RawCopy64.exe /FileNamePath:"$($env:SYSTEMDRIVE)0" /OutputPath:"$outputPath\MFT"
+	}
+	else
+	{
+		.\RawCopy.exe /FileNamePath:"$($env:SYSTEMDRIVE)0" /OutputPath:"$outputPath\MFT"
+	}
 }
 
 function GetHives
 {
-	$hives = @("COMPONENTS","SAM","SECURITY","SOFTWARE","DEFAULT","SYSTEM")
-	foreach ($hive in $hives)
+	if(!$(Test-Path "$outputPath\Hives\$($_.Name)"))
 	{
-		.\RawCopy.exe /FileNamePath:"$($env:SYSTEMROOT)\System32\config\$hive" /OutputPath:ExtractedFiles
+		New-Item -ItemType directory "$outputPath\Hives"
+	}
+	
+	#$hives = @("COMPONENTS","SAM","SECURITY","SOFTWARE","DEFAULT","SYSTEM")
+	Get-ChildItem "$($env:SYSTEMROOT)\System32\config\" | where { ! $_.PSIsContainer -and ![System.IO.Path]::hasExtension($_)} | 
+	ForEach-Object {
+		$_.Name
+		if($architecture -eq "64-bit")
+		{
+			.\RawCopy64.exe /FileNamePath:"$($_.FullName)" /OutputPath:"$outputPath\Hives"
+		}
+		else
+		{
+			.\RawCopy.exe /FileNamePath:"$($_.FullName)" /OutputPath:"$outputPath\Hives"
+		}
 	}
 	Get-ChildItem "$($env:SYSTEMDRIVE)\Users" | 
 	ForEach-Object{
-		if(!$(Test-Path "ExtracedFiles\$($_.Name)"))
+		$_.FullName
+		if(!$(Test-Path "$outputPath\Hives\$($_.Name)"))
 		{
-			New-Item -ItemType directory "ExtracedFiles\$($_.Name)"
+			New-Item -ItemType directory "$outputPath\Hives\$($_.Name)"
 		}
-		.\RawCopy.exe /FileNamePath:"$($_.FullName)\Ntuser.dat" /OutputPath:"ExtracedFiles\$($_.Name)"
+		if(Test-Path "$($_.FullName)\Ntuser.dat")
+		{
+			if($architecture -eq "64-bit")
+			{
+				.\RawCopy64.exe /FileNamePath:"$($_.FullName)\Ntuser.dat" /OutputPath:"$outputPath\Hives\$($_.Name)"
+			}
+			else
+			{
+				.\RawCopy.exe /FileNamePath:"$($_.FullName)\Ntuser.dat" /OutputPath:"$outputPath\Hives\$($_.Name)"
+			}
+		}
 	}
 }
 
 function GetRam
 {
-	 .\winpmem-2.1.post4.exe --format raw -o ExtractedFiles\memdump.raw
+	 .\winpmem-2.1.post4.exe -o RAMCapture\memdump.raw
 }
 
 if($All)
@@ -1019,4 +1054,13 @@ if($BrowserHistory)
 if($SystemDrivers)
 {
 	GetSystemDrivers
+}
+if($Hives)
+{
+	GetHives
+}
+
+if($MFT)
+{
+	GetMFT
 }
